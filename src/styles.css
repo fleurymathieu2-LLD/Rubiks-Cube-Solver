@@ -668,6 +668,17 @@ button {
   border-radius: 28px;
   padding: 16px;
 }
+.solve__now {
+  width: 100%;
+  display: grid;
+  gap: 8px;
+  text-align: left;
+}
+/* Keep the cube, the current move and its buttons on one screen in landscape. */
+.solve__cube .cube3d {
+  max-width: min(100%, 440px, calc(100dvh - 420px));
+  min-width: 220px;
+}
 .solve__panel {
   display: grid;
   gap: 14px;
@@ -811,6 +822,87 @@ button {
 .now__desc {
   font-size: var(--step-1);
   margin-top: 6px;
+}
+.now {
+  position: relative;
+  overflow: hidden;
+}
+.now__count {
+  font-size: var(--step--1);
+  font-weight: 700;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  margin-bottom: 4px;
+}
+.now__timer {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 5px;
+  width: 100%;
+  background: var(--accent);
+  transform-origin: left;
+  animation: fill linear forwards;
+}
+@keyframes fill {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+.lastmove {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  color: var(--muted);
+}
+.lastmove b {
+  color: var(--ink);
+  font-family: var(--font-display);
+}
+.lastmove__again {
+  margin-left: auto;
+  padding-inline: 8px;
+}
+.speed {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.speed__label {
+  font-size: var(--step--1);
+  font-weight: 700;
+  color: var(--muted);
+  margin-right: 4px;
+}
+.speed__btn {
+  min-height: 44px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1.5px solid var(--line);
+  background: var(--surface);
+  font-weight: 700;
+  font-size: var(--step--1);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.speed__btn.is-on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+.controls .btn {
+  white-space: nowrap;
+  padding-inline: 10px;
+}
+.btn.is-playing {
+  border-color: var(--accent);
+  color: var(--accent);
 }
 .explain {
   border-left: 4px solid var(--good);

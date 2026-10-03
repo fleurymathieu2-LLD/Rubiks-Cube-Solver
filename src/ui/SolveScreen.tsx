@@ -7,6 +7,7 @@ import { Anim, Cube3D } from './Cube3D';
 import { ColorChip } from './Chip';
 import { MoveIcon } from './MoveIcon';
 import { buildPlan, focusStickers, stateAt } from './plan';
+import { load, save } from './storage';
 
 interface Props {
   solution: Solution;
@@ -19,6 +20,14 @@ interface Props {
   onLearn: (stage?: string) => void;
 }
 
+type Speed = 'slow' | 'normal' | 'fast';
+/** turn: time for one quarter turn. pause: wait after each move when playing. */
+const SPEEDS: Record<Speed, { label: string; turn: number; pause: number }> = {
+  slow: { label: 'Slow', turn: 1000, pause: 2500 },
+  normal: { label: 'Normal', turn: 650, pause: 1500 },
+  fast: { label: 'Fast', turn: 350, pause: 600 },
+};
+
 const HOLD_TEXT: Record<string, string> = {
   y: 'Turn the whole cube to the left',
   "y'": 'Turn the whole cube to the right',
@@ -29,7 +38,17 @@ export function SolveScreen({ solution, position, setPosition, explain, setExpla
   const plan = useMemo(() => buildPlan(solution), [solution]);
   const [anim, setAnim] = useState<(Anim & { back: boolean }) | null>(null);
   const [playing, setPlaying] = useState(false);
+  const [speed, setSpeedState] = useState<Speed>(() => {
+    const v = load<Speed>('speed', 'normal');
+    return v in SPEEDS ? v : 'normal';
+  });
+  const setSpeed = (v: Speed) => {
+    setSpeedState(v);
+    save('speed', v);
+  };
   const animId = useRef(0);
+  // True right after Play is pressed, so the first move starts at once.
+  const playJustStarted = useRef(false);
 
   const done = plan.length === 0 || position.step >= plan.length;
   const step = plan[Math.min(position.step, plan.length - 1)];
@@ -74,6 +93,21 @@ export function SolveScreen({ solution, position, setPosition, explain, setExpla
     }
   }, [anim, done, n, step, position.step, plan, setPosition]);
 
+  // Play the last move again: go back one move without animation, then turn it forward.
+  const replay = useCallback(() => {
+    if (anim || done || n === 0) return;
+    setPlaying(false);
+    setPosition({ step: position.step, move: n - 1 });
+    setAnim({ move: step.seq[n - 1].move, id: ++animId.current, back: false });
+  }, [anim, done, n, step, position.step, setPosition]);
+
+  const togglePlay = useCallback(() => {
+    setPlaying((p) => {
+      if (!p) playJustStarted.current = true;
+      return !p;
+    });
+  }, []);
+
   const animRef = useRef(anim);
   animRef.current = anim;
   const onAnimDone = useCallback(() => {
@@ -82,29 +116,32 @@ export function SolveScreen({ solution, position, setPosition, explain, setExpla
     setAnim(null);
   }, [position.step, n, setPosition]);
 
-  // Auto play: keep going until the end of the step.
+  // Auto play: one move, then a pause so you can copy it, until the end of the step.
   useEffect(() => {
     if (!playing || anim || done) return;
     if (n >= step.seq.length) {
       setPlaying(false);
       return;
     }
-    const t = window.setTimeout(forward, 260);
+    const wait = playJustStarted.current ? 300 : SPEEDS[speed].pause;
+    playJustStarted.current = false;
+    const t = window.setTimeout(forward, wait);
     return () => window.clearTimeout(t);
-  }, [playing, anim, done, n, step, forward]);
+  }, [playing, anim, done, n, step, forward, speed]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'ArrowRight') forward();
       if (e.key === 'ArrowLeft') backward();
+      if (e.key.toLowerCase() === 'r') replay();
       if (e.key === ' ') {
         e.preventDefault();
-        setPlaying((p) => !p);
+        togglePlay();
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [forward, backward]);
+  }, [forward, backward, replay, togglePlay]);
 
   // In the normal view you see the top (stickers 0-8), right (9-17) and front (18-26).
   const focusHidden = highlight.size > 0 && ![...highlight].some((i) => i < 27);
@@ -180,8 +217,73 @@ export function SolveScreen({ solution, position, setPosition, explain, setExpla
             anim={anim}
             onAnimDone={onAnimDone}
             highlight={highlight}
+            speed={SPEEDS[speed].turn}
             label="Your cube"
           />
+          <div className="speed" role="radiogroup" aria-label="Speed">
+            <span className="speed__label">Speed</span>
+            {(Object.keys(SPEEDS) as Speed[]).map((k) => (
+              <button
+                key={k}
+                role="radio"
+                aria-checked={speed === k}
+                className={`speed__btn ${speed === k ? 'is-on' : ''}`}
+                onClick={() => setSpeed(k)}
+              >
+                {SPEEDS[k].label}
+              </button>
+            ))}
+          </div>
+          {!done && (
+            <div className="solve__now">
+              <div className={`now ${current ? '' : 'now--end'}`}>
+                {current ? (
+                  <>
+                    <MoveIcon move={current.move} size={84} />
+                    <div className="now__text">
+                      <div className="now__count">
+                        {anim && !anim.back ? 'Turning now' : 'Next'} · move {n + 1} of {step.seq.length}
+                      </div>
+                      <div className="now__move">{current.kind === 'hold' ? 'Turn the cube' : current.move}</div>
+                      <div className="now__desc">
+                        {current.kind === 'hold'
+                          ? `${HOLD_TEXT[current.move]}. Keep ${colorName(step.top).toLowerCase()} on top. ${colorName(step.front)} is now in front.`
+                          : describeMove(current.move)}
+                      </div>
+                    </div>
+                    {playing && !anim && (
+                      // Fills up during the pause. The next move starts when it is full.
+                      <div
+                        key={`${position.step}-${n}`}
+                        className="now__timer"
+                        style={{ animationDuration: `${SPEEDS[speed].pause}ms` }}
+                        aria-hidden="true"
+                      />
+                    )}
+                  </>
+                ) : (
+                  <div className="now__text">
+                    <div className="now__move">Step done ✓</div>
+                    <div className="now__desc">
+                      Compare your cube with the picture. When it matches, go to the next step.
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {n > 0 && step.seq[n - 1] && (
+                <div className="lastmove">
+                  <span className="lastmove__label">Just done:</span>{' '}
+                  <b>{step.seq[n - 1].kind === 'hold' ? 'Turned the cube' : step.seq[n - 1].move}</b>
+                  {step.seq[n - 1].kind === 'turn' ? ` (${describeMove(step.seq[n - 1].move).replace(/\.$/, '').toLowerCase()})` : ''}
+                  <button className="link lastmove__again" onClick={replay} disabled={!!anim}>
+                    ↺ Show again
+                  </button>
+                </div>
+              )}
+
+            </div>
+          )}
           {focusHidden ? (
             <div className="caption caption--note">The piece for this step is at the back or bottom. Drag the cube to see it.</div>
           ) : (
@@ -280,29 +382,6 @@ export function SolveScreen({ solution, position, setPosition, explain, setExpla
                 })}
               </div>
 
-              <div className={`now ${current ? '' : 'now--end'}`}>
-                {current ? (
-                  <>
-                    <MoveIcon move={current.move} size={84} />
-                    <div className="now__text">
-                      <div className="now__move">{current.kind === 'hold' ? 'Turn the cube' : current.move}</div>
-                      <div className="now__desc">
-                        {current.kind === 'hold'
-                          ? `${HOLD_TEXT[current.move]}. Keep ${colorName(step.top).toLowerCase()} on top. ${colorName(step.front)} is now in front.`
-                          : describeMove(current.move)}
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  <div className="now__text">
-                    <div className="now__move">Step done ✓</div>
-                    <div className="now__desc">
-                      Compare your cube with the picture. When it matches, go to the next step.
-                    </div>
-                  </div>
-                )}
-              </div>
-
               {explain && (
                 <div className="explain">
                   <div className="explain__title">Why this works</div>
@@ -315,21 +394,23 @@ export function SolveScreen({ solution, position, setPosition, explain, setExpla
 
               <div className="controls">
                 <button className="btn btn--big" onClick={backward} disabled={position.step === 0 && n === 0} aria-label="Previous move">
-                  ◀ Back
+                  ◀ Previous
                 </button>
                 <button
-                  className="btn btn--big"
-                  onClick={() => setPlaying((p) => !p)}
+                  className={`btn btn--big ${playing ? 'is-playing' : ''}`}
+                  onClick={togglePlay}
                   disabled={!current}
-                  aria-label={playing ? 'Pause' : 'Play the rest of this step'}
+                  aria-label={playing ? 'Pause' : 'Play this step with a pause after each move'}
                 >
-                  {playing ? 'Pause' : 'Play step'}
+                  {playing ? '❚❚ Pause' : '▶ Play'}
                 </button>
                 <button className="btn btn--big btn--primary" onClick={forward} aria-label="Next move">
                   {current ? 'Next move ▶' : position.step + 1 < plan.length ? 'Next step ▶' : 'Finish ▶'}
                 </button>
               </div>
-              <div className="caption">Tip: on a keyboard, use the arrow keys and the space bar.</div>
+              <div className="caption">
+                Play makes one move, then waits so you can copy it. Tap a move above to jump to it. On a keyboard: arrow keys, space bar, and R to show a move again.
+              </div>
             </>
           )}
         </section>
