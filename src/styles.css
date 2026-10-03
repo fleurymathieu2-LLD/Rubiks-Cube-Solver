@@ -834,75 +834,20 @@ button {
   font-variant-numeric: tabular-nums;
   margin-bottom: 4px;
 }
-.now__timer {
-  position: absolute;
-  left: 0;
-  bottom: 0;
-  height: 5px;
-  width: 100%;
-  background: var(--accent);
-  transform-origin: left;
-  animation: fill linear forwards;
-}
-@keyframes fill {
-  from {
-    transform: scaleX(0);
-  }
-  to {
-    transform: scaleX(1);
-  }
-}
-.lastmove {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 6px;
-  color: var(--muted);
-}
-.lastmove b {
-  color: var(--ink);
-  font-family: var(--font-display);
-}
-.lastmove__again {
-  margin-left: auto;
-  padding-inline: 8px;
-}
-.speed {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-  justify-content: center;
-}
-.speed__label {
-  font-size: var(--step--1);
-  font-weight: 700;
-  color: var(--muted);
-  margin-right: 4px;
-}
-.speed__btn {
-  min-height: 44px;
-  padding: 6px 14px;
-  border-radius: 999px;
-  border: 1.5px solid var(--line);
-  background: var(--surface);
-  font-weight: 700;
-  font-size: var(--step--1);
-  cursor: pointer;
-  touch-action: manipulation;
-}
-.speed__btn.is-on {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-ink);
-}
 .controls .btn {
   white-space: nowrap;
   padding-inline: 10px;
 }
-.btn.is-playing {
-  border-color: var(--accent);
-  color: var(--accent);
+.now__again {
+  margin-top: 4px;
+}
+.now__move--ready {
+  font-size: var(--step-2);
+}
+.step-end {
+  background: var(--good-soft);
+  border-radius: 12px;
+  padding: 10px 14px;
 }
 .explain {
   border-left: 4px solid var(--good);
@@ -919,7 +864,7 @@ button {
 }
 .controls {
   display: grid;
-  grid-template-columns: 1fr 1fr 1.4fr;
+  grid-template-columns: 1fr 1.3fr;
   gap: 10px;
   /* Always in reach, even when the step text is long. */
   position: sticky;
@@ -1153,15 +1098,12 @@ button {
   .learn__demo {
     grid-template-columns: minmax(0, 1fr);
   }
-  .controls {
-    grid-template-columns: 1fr 1fr;
-  }
-  .controls .btn--primary {
-    grid-column: span 2;
-    order: -1;
-  }
   .now__move {
     font-size: var(--step-2);
+  }
+  .controls .btn {
+    white-space: normal;
+    font-size: var(--step-0);
   }
   .topbar__title {
     font-size: var(--step-0);

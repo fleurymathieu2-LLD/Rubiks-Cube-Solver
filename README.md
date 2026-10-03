@@ -3,7 +3,7 @@
 An iPad app that helps you solve a 3 × 3 Rubik's cube, and teaches you how to do it yourself.
 
 1. **Enter your cube.** Hold the cube the way the app shows and tap in the 9 colors of each side. The app checks the colors and tells you exactly what to fix if something is wrong.
-2. **Follow the steps.** The app solves the cube with the beginner's layer-by-layer method in 7 stages. Each step tells you how to hold the cube. You tap **Next move** and the 3D cube shows the turn, with a picture and plain words ("Turn the right side up, away from you"). Go back and forth one move at a time with **Previous** and **Next move**, or tap **Show again** to repeat a move. **Play** makes one move, then waits so you can copy it. Choose Slow, Normal or Fast.
+2. **Follow the steps.** The app solves the cube with the beginner's layer-by-layer method in 7 stages. Each step tells you how to hold the cube. You tap **Next move** and the 3D cube shows the turn, with a picture and plain words ("Turn the right side up, away from you"). It works step by step: each move has its own screen, and nothing changes until you tap. Go back and forth with **Previous move** and **Next move**, tap any move in the list to jump to it, or tap **Show this move again**.
 3. **Learn why.** Turn on **Explain** to see why each step works. The **Learn the method** page has a short guide and a demo for every stage, so you can learn to solve the cube without the app.
 
 The app is a web app. It runs in Safari on the iPad, and you can add it to the home screen so it opens full screen like a normal app. It works offline after the first visit.

@@ -7,7 +7,6 @@ import { Anim, Cube3D } from './Cube3D';
 import { ColorChip } from './Chip';
 import { MoveIcon } from './MoveIcon';
 import { buildPlan, focusStickers, stateAt } from './plan';
-import { load, save } from './storage';
 
 interface Props {
   solution: Solution;
@@ -20,13 +19,8 @@ interface Props {
   onLearn: (stage?: string) => void;
 }
 
-type Speed = 'slow' | 'normal' | 'fast';
-/** turn: time for one quarter turn. pause: wait after each move when playing. */
-const SPEEDS: Record<Speed, { label: string; turn: number; pause: number }> = {
-  slow: { label: 'Slow', turn: 1000, pause: 2500 },
-  normal: { label: 'Normal', turn: 650, pause: 1500 },
-  fast: { label: 'Fast', turn: 350, pause: 600 },
-};
+/** Time for one quarter turn. Calm enough to follow with a real cube. */
+const TURN_MS = 700;
 
 const HOLD_TEXT: Record<string, string> = {
   y: 'Turn the whole cube to the left',
@@ -37,18 +31,7 @@ const HOLD_TEXT: Record<string, string> = {
 export function SolveScreen({ solution, position, setPosition, explain, setExplain, onHome, onNewCube, onLearn }: Props) {
   const plan = useMemo(() => buildPlan(solution), [solution]);
   const [anim, setAnim] = useState<(Anim & { back: boolean }) | null>(null);
-  const [playing, setPlaying] = useState(false);
-  const [speed, setSpeedState] = useState<Speed>(() => {
-    const v = load<Speed>('speed', 'normal');
-    return v in SPEEDS ? v : 'normal';
-  });
-  const setSpeed = (v: Speed) => {
-    setSpeedState(v);
-    save('speed', v);
-  };
   const animId = useRef(0);
-  // True right after Play is pressed, so the first move starts at once.
-  const playJustStarted = useRef(false);
 
   const done = plan.length === 0 || position.step >= plan.length;
   const step = plan[Math.min(position.step, plan.length - 1)];
@@ -77,7 +60,6 @@ export function SolveScreen({ solution, position, setPosition, explain, setExpla
 
   const backward = useCallback(() => {
     if (anim) return;
-    setPlaying(false);
     if (done) {
       const last = plan.length - 1;
       if (last >= 0) setPosition({ step: last, move: plan[last].seq.length });
@@ -93,20 +75,22 @@ export function SolveScreen({ solution, position, setPosition, explain, setExpla
     }
   }, [anim, done, n, step, position.step, plan, setPosition]);
 
-  // Play the last move again: go back one move without animation, then turn it forward.
+  // Show the move on screen once more: go back one move without animation, then turn it forward.
   const replay = useCallback(() => {
     if (anim || done || n === 0) return;
-    setPlaying(false);
     setPosition({ step: position.step, move: n - 1 });
     setAnim({ move: step.seq[n - 1].move, id: ++animId.current, back: false });
   }, [anim, done, n, step, position.step, setPosition]);
 
-  const togglePlay = useCallback(() => {
-    setPlaying((p) => {
-      if (!p) playJustStarted.current = true;
-      return !p;
-    });
-  }, []);
+  // Jump to any move of the step: show the cube just before it, then turn it.
+  const goToMove = useCallback(
+    (i: number) => {
+      if (anim || done) return;
+      setPosition({ step: position.step, move: i });
+      setAnim({ move: step.seq[i].move, id: ++animId.current, back: false });
+    },
+    [anim, done, step, position.step, setPosition],
+  );
 
   const animRef = useRef(anim);
   animRef.current = anim;
@@ -116,32 +100,15 @@ export function SolveScreen({ solution, position, setPosition, explain, setExpla
     setAnim(null);
   }, [position.step, n, setPosition]);
 
-  // Auto play: one move, then a pause so you can copy it, until the end of the step.
-  useEffect(() => {
-    if (!playing || anim || done) return;
-    if (n >= step.seq.length) {
-      setPlaying(false);
-      return;
-    }
-    const wait = playJustStarted.current ? 300 : SPEEDS[speed].pause;
-    playJustStarted.current = false;
-    const t = window.setTimeout(forward, wait);
-    return () => window.clearTimeout(t);
-  }, [playing, anim, done, n, step, forward, speed]);
-
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'ArrowRight') forward();
       if (e.key === 'ArrowLeft') backward();
       if (e.key.toLowerCase() === 'r') replay();
-      if (e.key === ' ') {
-        e.preventDefault();
-        togglePlay();
-      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [forward, backward, replay, togglePlay]);
+  }, [forward, backward, replay]);
 
   // In the normal view you see the top (stickers 0-8), right (9-17) and front (18-26).
   const focusHidden = highlight.size > 0 && ![...highlight].some((i) => i < 27);
@@ -169,7 +136,11 @@ export function SolveScreen({ solution, position, setPosition, explain, setExpla
   const stageIdx = STAGE_ORDER.indexOf(step.stage);
   const guide = STAGE_BY_ID[step.stage];
   const firstOfStage = position.step === 0 || plan[position.step - 1].stage !== step.stage;
-  const current = !done && n < step.seq.length ? step.seq[n] : null;
+  // Each move has its own screen. After n moves, the screen shows move n (the one just made).
+  // While a move turns forward, the screen already shows that move.
+  const page = anim && !anim.back ? n + 1 : n;
+  const shownMove = !done && page > 0 ? step.seq[page - 1] : null;
+  const lastOfStep = page === step.seq.length;
   const stageSteps = plan.filter((s) => s.stage === step.stage);
   const stepInStage = stageSteps.findIndex((s) => s.index === step.index) + 1;
 
@@ -217,71 +188,46 @@ export function SolveScreen({ solution, position, setPosition, explain, setExpla
             anim={anim}
             onAnimDone={onAnimDone}
             highlight={highlight}
-            speed={SPEEDS[speed].turn}
+            speed={TURN_MS}
             label="Your cube"
           />
-          <div className="speed" role="radiogroup" aria-label="Speed">
-            <span className="speed__label">Speed</span>
-            {(Object.keys(SPEEDS) as Speed[]).map((k) => (
-              <button
-                key={k}
-                role="radio"
-                aria-checked={speed === k}
-                className={`speed__btn ${speed === k ? 'is-on' : ''}`}
-                onClick={() => setSpeed(k)}
-              >
-                {SPEEDS[k].label}
-              </button>
-            ))}
-          </div>
           {!done && (
             <div className="solve__now">
-              <div className={`now ${current ? '' : 'now--end'}`}>
-                {current ? (
+              <div className="now">
+                {shownMove ? (
                   <>
-                    <MoveIcon move={current.move} size={84} />
+                    <MoveIcon move={shownMove.move} size={84} />
                     <div className="now__text">
                       <div className="now__count">
-                        {anim && !anim.back ? 'Turning now' : 'Next'} · move {n + 1} of {step.seq.length}
+                        Move {page} of {step.seq.length}
                       </div>
-                      <div className="now__move">{current.kind === 'hold' ? 'Turn the cube' : current.move}</div>
+                      <div className="now__move">{shownMove.kind === 'hold' ? 'Turn the cube' : shownMove.move}</div>
                       <div className="now__desc">
-                        {current.kind === 'hold'
-                          ? `${HOLD_TEXT[current.move]}. Keep ${colorName(step.top).toLowerCase()} on top. ${colorName(step.front)} is now in front.`
-                          : describeMove(current.move)}
+                        {shownMove.kind === 'hold'
+                          ? `${HOLD_TEXT[shownMove.move]}. Keep ${colorName(step.top).toLowerCase()} on top. ${colorName(step.front)} is now in front.`
+                          : describeMove(shownMove.move)}
                       </div>
+                      <button className="link now__again" onClick={replay} disabled={!!anim}>
+                        ↺ Show this move again
+                      </button>
                     </div>
-                    {playing && !anim && (
-                      // Fills up during the pause. The next move starts when it is full.
-                      <div
-                        key={`${position.step}-${n}`}
-                        className="now__timer"
-                        style={{ animationDuration: `${SPEEDS[speed].pause}ms` }}
-                        aria-hidden="true"
-                      />
-                    )}
                   </>
                 ) : (
                   <div className="now__text">
-                    <div className="now__move">Step done ✓</div>
+                    <div className="now__count">Get ready · {step.seq.length} {step.seq.length === 1 ? 'move' : 'moves'} in this step</div>
+                    <div className="now__move now__move--ready">Hold your cube like the picture</div>
                     <div className="now__desc">
-                      Compare your cube with the picture. When it matches, go to the next step.
+                      {colorName(step.front)} faces you, {colorName(step.top).toLowerCase()} is on top. Tap <b>Next move</b> to see the first move.
                     </div>
                   </div>
                 )}
               </div>
-
-              {n > 0 && step.seq[n - 1] && (
-                <div className="lastmove">
-                  <span className="lastmove__label">Just done:</span>{' '}
-                  <b>{step.seq[n - 1].kind === 'hold' ? 'Turned the cube' : step.seq[n - 1].move}</b>
-                  {step.seq[n - 1].kind === 'turn' ? ` (${describeMove(step.seq[n - 1].move).replace(/\.$/, '').toLowerCase()})` : ''}
-                  <button className="link lastmove__again" onClick={replay} disabled={!!anim}>
-                    ↺ Show again
-                  </button>
+              {lastOfStep && (
+                <div className="step-end" role="status">
+                  <b>That was the last move of this step.</b> Check that your cube looks like the picture, then tap{' '}
+                  <b>{position.step + 1 < plan.length ? 'Next step' : 'Finish'}</b>.
                 </div>
               )}
-
             </div>
           )}
           {focusHidden ? (
@@ -339,8 +285,8 @@ export function SolveScreen({ solution, position, setPosition, explain, setExpla
                         .map(({ m, i }) => (
                           <button
                             key={i}
-                            className={`tok tok--hold ${i < n ? 'is-done' : i === n ? 'is-now' : ''}`}
-                            onClick={() => !anim && setPosition({ step: position.step, move: i })}
+                            className={`tok tok--hold ${i < page - 1 ? 'is-done' : i === page - 1 ? 'is-now' : ''}`}
+                            onClick={() => goToMove(i)}
                           >
                             {HOLD_TEXT[m.move]}: {colorName(step.front)} to the front
                           </button>
@@ -350,9 +296,9 @@ export function SolveScreen({ solution, position, setPosition, explain, setExpla
                 )}
                 {step.parts.map((p, pi) => {
                   const idxs = step.seq.map((m, i) => ({ m, i })).filter(({ m }) => m.part === pi);
-                  const roundNow = current && current.part === pi ? current.round : null;
-                  // Show one round of tokens. Their state follows the current round.
-                  const round = roundNow ?? (idxs.length && idxs[idxs.length - 1].i < n ? p.repeat : 1);
+                  const roundNow = shownMove && shownMove.part === pi ? shownMove.round : null;
+                  // Show one round of tokens. Their state follows the round on screen.
+                  const round = roundNow ?? (idxs.length && idxs[idxs.length - 1].i < page - 1 ? p.repeat : 1);
                   const shownIdx = idxs.filter(({ m }) => m.round === round);
                   return (
                     <div className="seq__part" key={pi}>
@@ -369,8 +315,8 @@ export function SolveScreen({ solution, position, setPosition, explain, setExpla
                         {shownIdx.map(({ m, i }) => (
                           <button
                             key={i}
-                            className={`tok ${i < n ? 'is-done' : i === n ? 'is-now' : ''}`}
-                            onClick={() => !anim && setPosition({ step: position.step, move: i })}
+                            className={`tok ${i < page - 1 ? 'is-done' : i === page - 1 ? 'is-now' : ''}`}
+                            onClick={() => goToMove(i)}
                             aria-label={`Go to move ${m.move}`}
                           >
                             {m.move}
@@ -394,22 +340,14 @@ export function SolveScreen({ solution, position, setPosition, explain, setExpla
 
               <div className="controls">
                 <button className="btn btn--big" onClick={backward} disabled={position.step === 0 && n === 0} aria-label="Previous move">
-                  ◀ Previous
-                </button>
-                <button
-                  className={`btn btn--big ${playing ? 'is-playing' : ''}`}
-                  onClick={togglePlay}
-                  disabled={!current}
-                  aria-label={playing ? 'Pause' : 'Play this step with a pause after each move'}
-                >
-                  {playing ? '❚❚ Pause' : '▶ Play'}
+                  ◀ Previous move
                 </button>
                 <button className="btn btn--big btn--primary" onClick={forward} aria-label="Next move">
-                  {current ? 'Next move ▶' : position.step + 1 < plan.length ? 'Next step ▶' : 'Finish ▶'}
+                  {!lastOfStep ? 'Next move ▶' : position.step + 1 < plan.length ? 'Next step ▶' : 'Finish ▶'}
                 </button>
               </div>
               <div className="caption">
-                Play makes one move, then waits so you can copy it. Tap a move above to jump to it. On a keyboard: arrow keys, space bar, and R to show a move again.
+                The app waits for you: nothing changes until you tap. Tap any move in the list to jump to it. On a keyboard: the arrow keys, and R to show a move again.
               </div>
             </>
           )}
