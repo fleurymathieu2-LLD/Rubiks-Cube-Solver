@@ -6,13 +6,24 @@ An iPad app that helps you solve a 3 × 3 Rubik's cube, and teaches you how to d
 2. **Follow the steps.** The app solves the cube with the beginner's layer-by-layer method in 7 stages. Each step tells you how to hold the cube. You tap **Next move** and the 3D cube shows the turn, with a picture and plain words ("Turn the right side up, away from you"). It works step by step: each move has its own screen, and nothing changes until you tap. Go back and forth with **Previous move** and **Next move**, tap any move in the list to jump to it, or tap **Show this move again**.
 3. **Learn why.** Turn on **Explain** to see why each step works. The **Learn the method** page has a short guide and a demo for every stage, so you can learn to solve the cube without the app.
 
-The app is a web app. It runs in Safari on the iPad, and you can add it to the home screen so it opens full screen like a normal app. It works offline after the first visit.
+The app is a web app. It runs in Safari on the iPad, and you can add it to the home screen so it opens full screen like a normal app.
 
 ## Use it on your iPad
 
-The simplest way is to run it from your Mac and open it on the iPad over Wi-Fi:
+### Recommended: host it on Netlify (free, no Mac needed)
 
-1. Install [Node.js](https://nodejs.org) (version 20 or newer) on the Mac.
+The repo has a `netlify.toml` file, so Netlify knows how to build the app.
+
+1. Go to https://app.netlify.com and sign up with your GitHub account.
+2. Choose **Add new site → Import an existing project → GitHub**, and pick `Rubiks-Cube-Solver`. Give Netlify access to this repo when GitHub asks.
+3. Keep the settings it shows (they come from `netlify.toml`) and click **Deploy**.
+4. After a minute or two you get an address like `https://something.netlify.app`. Open it in Safari on the iPad, then tap **Share → Add to Home Screen**.
+
+Every push to `main` updates the site automatically. Because the address uses **https**, the app keeps a copy on the iPad and opens without internet after the first visit.
+
+### From your Mac, over Wi-Fi
+
+1. Install [Node.js](https://nodejs.org) (version 22 or newer) on the Mac.
 2. In Terminal:
    ```bash
    cd ~/"Rubiks Cube Solver"   # or wherever you cloned the repo
@@ -20,10 +31,9 @@ The simplest way is to run it from your Mac and open it on the iPad over Wi-Fi:
    npm run build
    npm run preview
    ```
-3. Terminal shows a "Network" address, for example `http://192.168.1.20:4173`. Open that address in Safari on the iPad. The iPad must be on the same Wi-Fi.
-4. In Safari, tap **Share**, then **Add to Home Screen**.
+3. Open the `Network:` address that Terminal shows (for example `http://10.0.0.44:4173`) in Safari on the iPad. The iPad must be on the same Wi-Fi, and the Terminal window must stay open. The address can change when the Mac reconnects to Wi-Fi.
 
-To have it always available (also away from home), host the `dist/` folder on any static web host, for example Netlify, Cloudflare Pages or GitHub Pages. The build is one self-contained `index.html` plus an icon, a manifest and an offline helper.
+This way the app does **not** work offline: Safari only keeps an offline copy for https addresses.
 
 ## For developers
 
