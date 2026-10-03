@@ -1,0 +1,16 @@
+{
+  "name": "Rubik's Cube Solver",
+  "short_name": "Cube Solver",
+  "description": "Enter the colors of your cube and follow easy steps to solve it.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#eef2f7",
+  "theme_color": "#1d55c4",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "apple-touch-icon.png", "sizes": "180x180", "type": "image/png" }
+  ]
+}
