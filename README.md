@@ -10,7 +10,11 @@ The app is a web app. It runs in Safari on the iPad, and you can add it to the h
 
 ## Use it on your iPad
 
-### Recommended: host it on Netlify (free, no Mac needed)
+### Recommended: your own DigitalOcean Droplet (private, no Mac needed)
+
+The app runs on a small Droplet that only your Tailscale devices can reach, the same way as the Urbanation app. A push to `main` deploys itself. Follow [DO_DEPLOY.md](DO_DEPLOY.md).
+
+### Other option: Netlify (free, public address)
 
 The repo has a `netlify.toml` file, so Netlify knows how to build the app.
 

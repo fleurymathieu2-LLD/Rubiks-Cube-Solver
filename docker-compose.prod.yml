@@ -1,0 +1,15 @@
+# The stack the DigitalOcean Droplet runs: one small nginx container.
+#
+# The port binds to 127.0.0.1 only. `tailscale serve` publishes it to the
+# tailnet over https; nothing is reachable from the public internet.
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: cube-solver:local
+    container_name: cube_web
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:80"

@@ -1,0 +1,18 @@
+# Self-deploy oneshot, fired by cube-self-deploy.timer.
+# Install (as root on the Droplet):
+#   cp deploy/do/cube-self-deploy.{service,timer} /etc/systemd/system/
+#   systemctl daemon-reload && systemctl enable --now cube-self-deploy.timer
+[Unit]
+Description=Cube Solver self-deploy (pull main, rebuild, restart if changed)
+Wants=network-online.target docker.service
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+User=cube
+Group=cube
+WorkingDirectory=/opt/cube/app
+Environment=REPO_DIR=/opt/cube/app
+ExecStart=/opt/cube/app/deploy/do/self-deploy.sh
+# The first build downloads Node and nginx images, so allow a few minutes.
+TimeoutStartSec=15min

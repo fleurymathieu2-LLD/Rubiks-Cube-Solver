@@ -1,0 +1,11 @@
+# Checks for a new version every 2 minutes, and shortly after boot.
+[Unit]
+Description=Run cube self-deploy every 2 minutes
+
+[Timer]
+OnBootSec=90s
+OnUnitActiveSec=2min
+Persistent=true
+
+[Install]
+WantedBy=timers.target
