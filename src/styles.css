@@ -593,9 +593,17 @@ button {
 /* Solve ------------------------------------------------------------------ */
 .method {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
   margin-block: 6px 10px;
+}
+.method--two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+@media (max-width: 560px) {
+  .method {
+    grid-template-columns: 1fr;
+  }
 }
 .method__opt {
   display: grid;

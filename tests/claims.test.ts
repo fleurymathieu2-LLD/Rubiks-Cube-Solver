@@ -1,8 +1,8 @@
 // Every claim the learning guide makes about an algorithm, checked on a real cube model.
 import { describe, expect, it } from 'vitest';
-import { applyMoves, CORNER_SLOTS, CubeState, EDGE_SLOTS, isSolved, parseMoves, slotSolved, solvedState } from '../src/cube/cube';
-import { ALG, solve } from '../src/cube/solver';
-import { STAGES } from '../src/content/learn';
+import { applyMoves, CORNER_SLOTS, CubeState, EDGE_SLOTS, Face, isSolved, locate, parseMoves, slotSolved, solvedState } from '../src/cube/cube';
+import { ALG, headlights, OLL_CORNERS, PLL_CORNERS, PLL_EDGES, solve, topRow } from '../src/cube/solver';
+import { FAST_STAGES, STAGES } from '../src/content/learn';
 import { scramble } from './helpers';
 
 const solved = solvedState();
@@ -11,7 +11,7 @@ const changedSlots = (s: CubeState) => [...EDGE_SLOTS, ...CORNER_SLOTS].filter((
 
 describe('claims in the guide', () => {
   it('every demo in the guide ends with a solved cube', () => {
-    for (const st of STAGES) for (const a of st.algorithms) {
+    for (const st of [...STAGES, ...FAST_STAGES]) for (const a of st.algorithms) {
       const s = run(a.demo.play, a.demo.setup ? run(a.demo.setup) : solved);
       expect(isSolved(s), `${st.name}: ${a.name}`).toBe(true);
     }
@@ -95,5 +95,66 @@ describe('claims in the guide', () => {
       const bottom = changedSlots(run(alg)).filter((n) => n.startsWith('D'));
       expect(bottom).toEqual(['DFR']);
     }
+  });
+});
+
+describe('claims in the fast-method guide', () => {
+  const f2l = (alg: string) => {
+    const s = run(alg.split(' ').reverse().map((m) => (m.endsWith("'") ? m[0] : m.endsWith('2') ? m : m + "'")).join(' '));
+    const c = locate(s, ['white', 'green', 'orange']);
+    const e = locate(s, ['green', 'orange']);
+    return { corner: c.slot, white: c.faceOf.white, edge: e.slot };
+  };
+
+  it('describes where the pair pieces start in each F2L demo', () => {
+    expect(f2l("R U R'")).toEqual({ corner: 'UFR', white: 'R', edge: 'UB' });
+    expect(f2l("F' U' F")).toEqual({ corner: 'UFR', white: 'F', edge: 'UL' });
+    expect(f2l("U R U' R'")).toEqual({ corner: 'UFR', white: 'F', edge: 'UR' });
+    expect(f2l("R U2 R' U' R U R'")).toEqual({ corner: 'UFR', white: 'U', edge: 'UR' });
+  });
+
+  it('every last-layer algorithm keeps the first two layers', () => {
+    for (const a of [...OLL_CORNERS, ...PLL_CORNERS, ...PLL_EDGES]) {
+      expect(changedSlots(run(a.alg)).filter((n) => !n.startsWith('U')), a.name).toEqual([]);
+    }
+  });
+
+  it('the yellow-face algorithms keep the yellow cross, and the last-layer algorithms keep the yellow face', () => {
+    for (const a of OLL_CORNERS) expect(['UF', 'UR', 'UB', 'UL'].every((n) => run(a.alg)[EDGE_SLOTS.find((e) => e.name === n)!.stickers[0]] === 'yellow')).toBe(true);
+    for (const a of [...PLL_CORNERS, ...PLL_EDGES]) expect(run(a.alg).slice(0, 9).every((c) => c === 'yellow'), a.name).toBe(true);
+  });
+
+  it('the T-perm case has headlights on the left, the Y-perm case has none, and edge cases keep the corners', () => {
+    const inv = (alg: string) => alg.split(' ').reverse().map((m) => (m.endsWith("'") ? m[0] : m.endsWith('2') ? m : m + "'")).join(' ');
+    expect(headlights(run(inv(PLL_CORNERS[0].alg)))).toEqual(['L']);
+    expect(headlights(run(inv(PLL_CORNERS[1].alg)))).toEqual([]);
+    for (const id of ['ua', 'ub']) {
+      const s = run(inv(PLL_EDGES.find((e) => e.id === id)!.alg));
+      expect(new Set(topRow(s, 'B')).size, id).toBe(1);
+    }
+  });
+
+  it('the solve steps say the truth about the last layer', () => {
+    const sides: Face[] = ['F', 'R', 'B', 'L'];
+    const opposite: Record<string, Face> = { F: 'B', B: 'F', R: 'L', L: 'R' };
+    const seen = new Set<string>();
+    for (let seed = 1; seed <= 400; seed++) {
+      for (const st of solve(applyMoves(solved, scramble(seed)), 'fast').steps) {
+        const lined = applyMoves(st.stateBefore, st.parts[0].label === 'Line it up' ? st.parts[0].moves : []);
+        if (st.title === 'Corners: swap two neighbors') expect(headlights(lined)).toEqual(['L']);
+        if (st.title === 'Corners: swap across') expect(headlights(lined)).toEqual([]);
+        if (st.title === 'Edges: Ua-perm' || st.title === 'Edges: Ub-perm') expect(new Set(topRow(lined, 'B')).size).toBe(1);
+        if (st.title === 'Edges: H-perm')
+          for (const f of sides) expect(topRow(lined, f)[1]).toBe(topRow(lined, opposite[f])[0]);
+        if (st.title === 'Edges: Z-perm')
+          for (const f of sides) {
+            expect(topRow(lined, f)[1]).not.toBe(topRow(lined, f)[0]);
+            expect(topRow(lined, f)[1]).not.toBe(topRow(lined, opposite[f])[0]);
+          }
+        if (st.stage === 'pllCorners' || st.stage === 'pllEdges' || st.stage === 'ollCorners') seen.add(st.title);
+      }
+    }
+    // Every case shows up in 400 solves.
+    expect(seen.size).toBe(7 + 2 + 4 + 1);
   });
 });

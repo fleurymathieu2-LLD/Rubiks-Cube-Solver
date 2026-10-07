@@ -21,6 +21,7 @@ import {
   slotSolved,
 } from './cube';
 import { colorName } from './colors';
+import { PairSlot, shortestCross, shortestPair } from './blocks';
 import { solveShort } from './twophase';
 
 export type StageId =
@@ -32,10 +33,28 @@ export type StageId =
   | 'cornerPositions'
   | 'cornerTwist'
   /** The short solution has one stage of its own. */
-  | 'short';
+  | 'short'
+  // The fast method (CFOP, with the 2-look last layer).
+  | 'fCross'
+  | 'f2l'
+  | 'ollEdges'
+  | 'ollCorners'
+  | 'pllCorners'
+  | 'pllEdges';
 
-/** "beginner": the 7-stage layer-by-layer method. "short": about 20 moves, found by a computer search. */
-export type Method = 'beginner' | 'short';
+/**
+ * "short": about 20 moves, found by a computer search.
+ * "fast": the method fast solvers use (CFOP), about 70 moves.
+ * "beginner": the 7-stage layer-by-layer method.
+ */
+export type Method = 'short' | 'fast' | 'beginner';
+
+export const FAST_STAGE_ORDER: StageId[] = ['fCross', 'f2l', 'ollEdges', 'ollCorners', 'pllCorners', 'pllEdges'];
+
+/** The stages of a method, in order. */
+export function stageOrder(method: Method): StageId[] {
+  return method === 'fast' ? FAST_STAGE_ORDER : method === 'short' ? ['short'] : STAGE_ORDER;
+}
 
 export const STAGE_ORDER: StageId[] = [
   'cross',
@@ -98,6 +117,83 @@ export const ALG = {
   cornerCycle: "U R U' L' U R' U' L",
   cornerTwist: "R' D' R D",
 } as const;
+
+/** Fast method: the 7 cases for the yellow corners (2-look OLL). The yellow cross is already done. */
+export const OLL_CORNERS = [
+  { id: 'sune', name: 'Sune', alg: "R U R' U R U2 R'" },
+  { id: 'antisune', name: 'Anti-Sune', alg: "R U2 R' U' R U' R'" },
+  { id: 'h', name: 'H', alg: "R U2 R' U' R U R' U' R U' R'" },
+  { id: 'pi', name: 'Pi', alg: "R U2 R2 U' R2 U' R2 U2 R" },
+  { id: 'headlights', name: 'Headlights', alg: "R2 D R' U2 R D' R' U2 R'" },
+  { id: 't', name: 'T', alg: "L F R' F' L' F R F'" },
+  { id: 'bowtie', name: 'Bowtie', alg: "F R' F' L F R F' L'" },
+] as const;
+
+/** Fast method: the last layer pieces in two looks (2-look PLL). */
+export const PLL_CORNERS = [
+  { id: 't', name: 'T-perm', alg: "R U R' U' R' F R2 U' R' U' R U R' F'" },
+  { id: 'y', name: 'Y-perm', alg: "F R U' R' U' R U R' F' R U R' U' R' F R F'" },
+] as const;
+export const PLL_EDGES = [
+  { id: 'ua', name: 'Ua-perm', alg: "R U' R U R U R U' R' U' R2" },
+  { id: 'ub', name: 'Ub-perm', alg: "R2 U R U R' U' R' U' R' U R'" },
+  { id: 'h', name: 'H-perm', alg: "R2 U2 R U2 R2 U2 R2 U2 R U2 R2" },
+  { id: 'z', name: 'Z-perm', alg: "R' U' R U' R U R U' R' U R U R2 U' R' U" },
+] as const;
+
+const TOP_CORNERS = ['UFL', 'UFR', 'UBR', 'UBL'];
+const DIRECTION: Record<Face, string> = { U: 'up', D: 'down', F: 'to the front', B: 'to the back', R: 'to the right', L: 'to the left' };
+const CORNER_NAME: Record<string, string> = { UFL: 'front left', UFR: 'front right', UBR: 'back right', UBL: 'back left' };
+
+/** Where the yellow sticker of each top corner points, in words. */
+export function yellowCornerLook(state: CubeState): string {
+  return TOP_CORNERS.map((n) => {
+    const c = slotColors(state, n);
+    const f = (Object.keys(c) as Face[]).find((k) => c[k] === 'yellow')!;
+    return `${CORNER_NAME[n]} ${DIRECTION[f]}`;
+  }).join(', ');
+}
+
+/** The top stickers on one side of the cube: left corner, edge, right corner. */
+export function topRow(state: CubeState, side: Face): Color[] {
+  const corners: Record<string, [string, string]> = { F: ['UFL', 'UFR'], R: ['UFR', 'UBR'], B: ['UBR', 'UBL'], L: ['UBL', 'UFL'] };
+  const [a, b] = corners[side];
+  return [slotColors(state, a)[side]!, slotColors(state, 'U' + side)[side]!, slotColors(state, b)[side]!];
+}
+
+/** Sides whose two top corners show the same color ("headlights"). */
+export function headlights(state: CubeState): Face[] {
+  return SIDES.filter((f) => {
+    const r = topRow(state, f);
+    return r[0] === r[2];
+  });
+}
+
+/** True when the top corners are in the right places relative to each other (a U turn may still be needed). */
+function topCornersMatch(state: CubeState): boolean {
+  for (let k = 0; k < 4; k++) {
+    const t = applyMoves(state, U_TURN[k] ? [U_TURN[k]] : []);
+    if (TOP_CORNERS.every((n) => slotSolved(t, n))) return true;
+  }
+  return false;
+}
+
+function solvedAfterUTurn(state: CubeState): boolean {
+  for (let k = 0; k < 4; k++) if (isSolved(applyMoves(state, U_TURN[k] ? [U_TURN[k]] : []))) return true;
+  return false;
+}
+
+/** Facelet check: the corner and edge sit next to each other with matching colors, as one block. */
+function joined(state: CubeState, corner: Color[], edge: Color[]): boolean {
+  const c = locate(state, corner);
+  const e = locate(state, edge);
+  const cs = slot(c.slot);
+  const es = slot(e.slot);
+  if (!es.faces.every((f) => cs.faces.includes(f))) return false;
+  const cc = slotColors(state, c.slot);
+  const ec = slotColors(state, e.slot);
+  return es.faces.every((f) => cc[f] === ec[f]);
+}
 
 const SIDES: Face[] = ['F', 'R', 'B', 'L'];
 const U_TURN = ['', 'U', 'U2', "U'"];
@@ -392,8 +488,8 @@ class Solver {
     return up;
   }
 
-  solveYellowCross() {
-    this.stage = 'yellowCross';
+  solveYellowCross(stage: StageId = 'yellowCross') {
+    this.stage = stage;
     for (let guard = 0; guard < 4; guard++) {
       const up = this.yellowEdgesUp();
       if (up.length === 4) return;
@@ -591,6 +687,222 @@ class Solver {
       parts: [part('Line up the top', uMoves(k))],
     });
   }
+
+  // -------------------------------------------------------------------------
+  // Fast method (CFOP).
+
+  solveFastCross() {
+    this.stage = 'fCross';
+    const moves = shortestCross(this.s);
+    const edges: Color[][] = SIDES.map((f) => ['white', this.c(f)]);
+    this.step({
+      title: 'White cross, planned',
+      instruction:
+        `Make the whole white cross on the bottom in ${moves.length} ${moves.length === 1 ? 'move' : 'moves'}, all at once. ` +
+        `Before you turn, find the four white edges and try to see where each one goes.`,
+      why:
+        `In the beginner's method you place the cross edges one at a time. Fast solvers plan the whole cross before they start, ` +
+        `and use moves that help two edges at once. Any cross can be made in 8 moves or fewer. This is the shortest cross for your cube. ` +
+        `Next time, try to find it yourself first, then compare with the app.`,
+      parts: [part('Make the cross', moves)],
+      focus: edges,
+    });
+    for (const f of SIDES) {
+      this.hold(this.c(f));
+      if (!slotSolved(this.s, 'DF')) throw new Error('Fast cross not solved');
+    }
+  }
+
+  /** Side colors of the pair that belongs at the front right when this color faces you. */
+  pairAt(front: Color): { front: Color; right: Color; corner: Color[]; edge: Color[] } {
+    const t = rotateTo(this.s, front);
+    const right = centerColor(t, 'R');
+    return { front, right, corner: ['white', front, right], edge: [front, right] };
+  }
+
+  pairSolved(front: Color): boolean {
+    const t = rotateTo(this.s, front);
+    return slotSolved(t, 'DFR') && slotSolved(t, 'FR');
+  }
+
+  solveF2L() {
+    this.stage = 'f2l';
+    const fronts = SIDES.map((f) => this.c(f));
+    // Slot names as seen when `front` faces you: the pair of each side color.
+    const slotFrom = (front: Color, other: Color): PairSlot => {
+      const t = rotateTo(this.s, front);
+      return (['FR', 'FL', 'BL', 'BR'] as PairSlot[])[
+        [centerColor(t, 'F'), centerColor(t, 'L'), centerColor(t, 'B'), centerColor(t, 'R')].indexOf(other)
+      ];
+    };
+    for (let guard = 0; guard < 12; guard++) {
+      const todo = fronts.filter((f) => !this.pairSolved(f));
+      if (todo.length === 0) return;
+      const done = fronts.filter((f) => this.pairSolved(f));
+      // Try every pair that is left, held at the front right, and take the shortest.
+      let best: { front: Color; moves: string[] } | null = null;
+      for (const front of todo) {
+        const t = rotateTo(this.s, front);
+        const keep = done.map((d) => slotFrom(front, d));
+        // R and U are the easiest to learn and to turn fast. Use F only when it saves more than 2 moves.
+        const withF = shortestPair(t, keep, 11, 'URF');
+        const ru = withF && shortestPair(t, keep, withF.length + 2, 'UR');
+        const moves = ru ?? withF;
+        const turnsNow = front === this.c('F') ? 0 : 1;
+        if (moves && (!best || moves.length + turnsNow < best.moves.length + (best.front === this.c('F') ? 0 : 1)))
+          best = { front, moves };
+      }
+      if (best) {
+        this.hold(best.front);
+        this.insertPair(best.front, best.moves);
+        continue;
+      }
+      // Every pair has a piece stuck in a wrong slot. Lift one out first.
+      this.extractPiece(todo);
+    }
+    throw new Error('F2L did not finish');
+  }
+
+  insertPair(front: Color, moves: string[]) {
+    const p = this.pairAt(front);
+    // Find where the pair is joined for good: from there on, the moves only insert the block.
+    const states = [this.s];
+    for (const m of moves) states.push(applyMove(states[states.length - 1], m));
+    let from = states.length - 1;
+    while (from > 0 && joined(states[from - 1], p.corner, p.edge)) from--;
+    const joinedAtStart = from === 0;
+    const parts =
+      from === 0
+        ? [part('Insert the pair', moves)]
+        : from >= moves.length - 1
+          ? [part('Pair up and insert', moves)]
+          : [part('Pair them up', moves.slice(0, from)), part('Insert the pair', moves.slice(from))];
+    this.step({
+      title: `${cap(p.front)} and ${low(p.right)} pair`,
+      instruction:
+        `Find the white, ${low(p.front)} and ${low(p.right)} corner and the ${low(p.front)} and ${low(p.right)} edge. ` +
+        `Their slot is at the front right. ` +
+        (joinedAtStart
+          ? `They are already joined together, so put them in as one block.`
+          : `First bring them together on top as one block, with the colors matching. Then put the block in.`),
+      why:
+        `F2L means "first two layers". Instead of a white corner and then a middle edge, you join the corner and its edge into a ` +
+        `block and insert both at once. That saves about half the moves. The cross stays safe because each R or F is turned back later. ` +
+        `This is a short way for this pair: ${moves.length} moves.`,
+      parts,
+      focus: [p.corner, p.edge],
+    });
+    if (!this.pairSolved(front)) throw new Error('F2L pair not solved');
+  }
+
+  extractPiece(todo: Color[]) {
+    for (const front of todo) {
+      const p = this.pairAt(front);
+      const c = locate(this.s, p.corner).slot;
+      const e = locate(this.s, p.edge).slot;
+      // A slot that holds one of the pieces: corner in the bottom, or edge in the middle layer.
+      const stuck = c.startsWith('D') ? c : !e.startsWith('U') ? e : null;
+      if (!stuck) continue;
+      const viewFor: Record<string, Face> = { DFR: 'F', DFL: 'L', DBL: 'B', DBR: 'R', FR: 'F', FL: 'L', BL: 'B', BR: 'R' };
+      this.hold(this.c(viewFor[stuck]));
+      this.step({
+        title: `${cap(p.front)} and ${low(p.right)} pair: take a piece out`,
+        instruction: `A piece of the ${low(p.front)} and ${low(p.right)} pair is stuck in the wrong slot. Hold that slot at the front right and lift it out to the top.`,
+        why: `R U R' brings everything in the front right slot up to the top layer, where you can pair it. Your cross and finished pairs are safe: R' turns back what R moved.`,
+        parts: [part('Lift it out', ALG.cornerPop)],
+        focus: [p.corner, p.edge],
+      });
+      return;
+    }
+    throw new Error('No F2L piece to take out');
+  }
+
+  solveOllCorners() {
+    this.stage = 'ollCorners';
+    const top = (st: CubeState) => TOP_CORNERS.every((n) => slotColors(st, n).U === 'yellow');
+    if (top(this.s)) return;
+    for (let k = 0; k < 4; k++) {
+      const turned = applyMoves(this.s, uMoves(k));
+      for (const c of OLL_CORNERS) {
+        if (!top(applyMoves(turned, parseMoves(c.alg)))) continue;
+        const up = TOP_CORNERS.filter((n) => slotColors(this.s, n).U === 'yellow').length;
+        this.step({
+          title: `Yellow face: ${c.name}`,
+          instruction:
+            `${up === 0 ? 'No corner has' : up === 1 ? 'One corner has' : `${up} corners have`} yellow on top: this is the ${c.name} case. ` +
+            `Turn the top until the yellow stickers of the corners point like this: ${yellowCornerLook(turned)}. Then do the ${c.name} algorithm.`,
+          why: `There are only 7 ways the yellow corners can sit once the cross is done. Each has its own algorithm that twists the corners and keeps the first two layers. You learn to recognize the case by where the yellow stickers point.`,
+          parts: [part('Line it up', uMoves(k)), part(c.name, c.alg)],
+        });
+        return;
+      }
+    }
+    throw new Error('Yellow corner case not found');
+  }
+
+  solvePllCorners() {
+    this.stage = 'pllCorners';
+    if (topCornersMatch(this.s)) return;
+    for (let k = 0; k < 4; k++) {
+      const turned = applyMoves(this.s, uMoves(k));
+      for (const c of PLL_CORNERS) {
+        if (!topCornersMatch(applyMoves(turned, parseMoves(c.alg)))) continue;
+        this.step({
+          title: c.id === 't' ? 'Corners: swap two neighbors' : 'Corners: swap across',
+          instruction:
+            c.id === 't'
+              ? `Look at the sides for two corners with the same color, like a pair of headlights. Turn the top so the headlights are on the left. Then do the T-perm.`
+              : `No side has headlights: two corners must swap across the top. Do the Y-perm from here.`,
+          why:
+            c.id === 't'
+              ? `Headlights mean those two corners are already right next to each other. The T-perm swaps the two corners on the right side (and two edges, fixed in the next step).`
+              : `With no headlights, the corners that are wrong sit diagonally across. The Y-perm swaps the front left and back right corners.`,
+          parts: [part('Line it up', uMoves(k)), part(c.name, c.alg)],
+        });
+        return;
+      }
+    }
+    throw new Error('Corner swap case not found');
+  }
+
+  solvePllEdges() {
+    this.stage = 'pllEdges';
+    if (!solvedAfterUTurn(this.s)) {
+      let found = false;
+      for (let k = 0; k < 4 && !found; k++) {
+        const turned = applyMoves(this.s, uMoves(k));
+        for (const c of PLL_EDGES) {
+          if (!solvedAfterUTurn(applyMoves(turned, parseMoves(c.alg)))) continue;
+          const bar = c.id === 'ua' || c.id === 'ub';
+          this.step({
+            title: `Edges: ${c.name}`,
+            instruction: bar
+              ? `One side has its whole top row in one color. Turn the top so that side is at the back. Then do the ${c.name}.`
+              : c.id === 'h'
+                ? `No side is finished, and each edge has the color of the opposite side. Do the H-perm.`
+                : `No side is finished, and each edge belongs on a side next to it. Turn the top so the cube looks like the picture, then do the Z-perm.`,
+            why: bar
+              ? `The ${c.name} moves three edges around in a circle and keeps the back. ${c.id === 'ua' ? 'Ua' : 'Ub'} turns them one way, ${c.id === 'ua' ? 'Ub' : 'Ua'} the other way. Look at the front edge: it shows which way they must go.`
+              : c.id === 'h'
+                ? `The H-perm swaps the front and back edges and the left and right edges at the same time.`
+                : `The Z-perm swaps two pairs of neighboring edges at the same time.`,
+            parts: [part('Line it up', uMoves(k)), part(c.name, c.alg)],
+          });
+          found = true;
+          break;
+        }
+      }
+      if (!found) throw new Error('Edge swap case not found');
+    }
+    let k = 0;
+    for (; k < 4; k++) if (isSolved(applyMoves(this.s, uMoves(k)))) break;
+    this.step({
+      title: 'Last turn',
+      instruction: `Turn the top to line it up with the rest. Your cube is solved!`,
+      why: `The last layer is complete, it only needs a turn to match the sides.`,
+      parts: [part('Line up the top', uMoves(k))],
+    });
+  }
 }
 
 const uMoves = (k: number): string[] => (U_TURN[k % 4] ? [U_TURN[k % 4]] : []);
@@ -614,7 +926,36 @@ function orientWhiteDown(state: CubeState): CubeState {
 }
 
 export function solve(input: CubeState, method: Method = 'beginner'): Solution {
-  return method === 'short' ? solveShortSteps(input) : solveBeginner(input);
+  return method === 'short' ? solveShortSteps(input) : method === 'fast' ? solveFast(input) : solveBeginner(input);
+}
+
+function finish(solver: Solver, method: Method, start: CubeState): Solution {
+  if (!isSolved(solver.s)) throw new Error('Solver did not finish');
+  const stages = stageOrder(method).map((id) => {
+    const steps = solver.steps.filter((s) => s.stage === id);
+    return { id, steps: steps.length, moves: steps.reduce((n, s) => n + s.moves.length, 0) };
+  });
+  return {
+    method,
+    start,
+    startFront: centerColor(start, 'F'),
+    startTop: centerColor(start, 'U'),
+    steps: solver.steps,
+    stages,
+    totalMoves: solver.steps.reduce((n, s) => n + s.moves.length, 0),
+  };
+}
+
+function solveFast(input: CubeState): Solution {
+  const start = orientWhiteDown(input);
+  const solver = new Solver(start);
+  solver.solveFastCross();
+  solver.solveF2L();
+  solver.solveYellowCross('ollEdges');
+  solver.solveOllCorners();
+  solver.solvePllCorners();
+  solver.solvePllEdges();
+  return finish(solver, 'fast', start);
 }
 
 /** Moves per step in the short solution: small enough to check the cube against the picture often. */
@@ -671,19 +1012,5 @@ function solveBeginner(input: CubeState): Solution {
   solver.solveYellowEdges();
   solver.solveCornerPositions();
   solver.solveCornerTwist();
-  if (!isSolved(solver.s)) throw new Error('Solver did not finish');
-
-  const stages = STAGE_ORDER.map((id) => {
-    const steps = solver.steps.filter((s) => s.stage === id);
-    return { id, steps: steps.length, moves: steps.reduce((n, s) => n + s.moves.length, 0) };
-  });
-  return {
-    method: 'beginner',
-    start,
-    startFront: centerColor(start, 'F'),
-    startTop: centerColor(start, 'U'),
-    steps: solver.steps,
-    stages,
-    totalMoves: solver.steps.reduce((n, s) => n + s.moves.length, 0),
-  };
+  return finish(solver, 'beginner', start);
 }

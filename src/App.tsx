@@ -57,7 +57,7 @@ export default function App() {
   const solutions: Record<Method, Solution> | null = useMemo(() => {
     if (!solveInput) return null;
     try {
-      return { short: solve(solveInput, 'short'), beginner: solve(solveInput, 'beginner') };
+      return { short: solve(solveInput, 'short'), fast: solve(solveInput, 'fast'), beginner: solve(solveInput, 'beginner') };
     } catch {
       return null;
     }
@@ -113,7 +113,7 @@ export default function App() {
     return (
       <SolveScreen
         solution={solution}
-        otherMoves={solutions![method === 'short' ? 'beginner' : 'short'].totalMoves}
+        moveCounts={{ short: solutions!.short.totalMoves, fast: solutions!.fast.totalMoves, beginner: solutions!.beginner.totalMoves }}
         setMethod={(m) => {
           setMethod(m);
           setPosition({ step: 0, move: 0 });
@@ -144,8 +144,9 @@ export default function App() {
           <h1>Cube Solver</h1>
           <p className="lead">
             Tell the app the colors on your cube. It shows you how to solve it, one move at a time, in plain words.
-            Pick the <b>shortest solution</b> (about 20 moves), or the <b>beginner's method</b> with <b>Explain</b> on
-            to learn why each move works, so one day you can do it without the app.
+            Pick the <b>shortest solution</b> (about 20 moves), or learn to do it yourself: the <b>beginner's method</b>{' '}
+            is the easiest to learn, and the <b>fast method</b> is what speedcubers use. Turn on <b>Explain</b> to learn
+            why each move works.
           </p>
           <div className="home__actions">
             {inProgress && (
@@ -157,7 +158,7 @@ export default function App() {
               Enter my cube
             </button>
             <button className="btn btn--big" onClick={() => openLearn()}>
-              Learn the method
+              Learn to solve it
             </button>
           </div>
           <button
@@ -189,12 +190,12 @@ export default function App() {
         <div className="howcard">
           <div className="howcard__n">3</div>
           <h3>Learn the why</h3>
-          <p>The beginner's method takes more moves, but you can learn it. It has 7 stages, each with a short guide and a demo.</p>
+          <p>Start with the beginner's method in 7 stages. Then move up to the fast method: about half the moves, in 6 stages. Each stage has a guide and demos.</p>
         </div>
       </section>
 
-      <section className="home__stages" aria-label="The 7 stages">
-        <div className="eyebrow">The 7 stages</div>
+      <section className="home__stages" aria-label="The 7 stages of the beginner's method">
+        <div className="eyebrow">The 7 stages of the beginner's method</div>
         <ol className="stagelist">
           {STAGE_ORDER.map((id) => (
             <li key={id}>

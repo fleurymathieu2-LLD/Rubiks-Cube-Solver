@@ -13,8 +13,8 @@ import { applyMove, centerColor, Color, CubeState, Face, FACE_NORMAL, slot, solv
 
 // Kociemba's slot order. Corner and edge stickers are listed with the U/D sticker
 // first (F/B for the middle-layer edges), then clockwise.
-const CORNERS = ['UFR', 'UFL', 'UBL', 'UBR', 'DFR', 'DFL', 'DBL', 'DBR'];
-const EDGES = ['UR', 'UF', 'UL', 'UB', 'DR', 'DF', 'DL', 'DB', 'FR', 'FL', 'BL', 'BR'];
+export const CORNERS = ['UFR', 'UFL', 'UBL', 'UBR', 'DFR', 'DFL', 'DBL', 'DBR'];
+export const EDGES = ['UR', 'UF', 'UL', 'UB', 'DR', 'DF', 'DL', 'DB', 'FR', 'FL', 'BL', 'BR'];
 
 const cross = (a: Vec, b: Vec): Vec => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 const dot = (a: Vec, b: Vec) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
@@ -32,11 +32,11 @@ const stickerOf = (name: string, face: Face) => {
   const s = slot(name);
   return s.stickers[s.faces.indexOf(face)];
 };
-const CORNER_STICKERS = CORNERS.map((n, i) => CORNER_FACES[i].map((f) => stickerOf(n, f)));
+export const CORNER_STICKERS = CORNERS.map((n, i) => CORNER_FACES[i].map((f) => stickerOf(n, f)));
 const EDGE_STICKERS = EDGES.map((n, i) => EDGE_FACES[i].map((f) => stickerOf(n, f)));
 
 /** Pieces: cp[i] is the corner in slot i, co[i] its twist (0-2). Edges the same with flip 0-1. */
-interface Cubie {
+export interface Cubie {
   cp: number[];
   co: number[];
   ep: number[];
@@ -51,7 +51,7 @@ const identity = (): Cubie => ({
 });
 
 /** Read the pieces from the stickers. The center colors say which color belongs to which face. */
-function toCubie(state: CubeState): Cubie {
+export function toCubie(state: CubeState): Cubie {
   const faceOf = new Map<Color, Face>();
   (['U', 'R', 'F', 'D', 'L', 'B'] as Face[]).forEach((f) => faceOf.set(centerColor(state, f), f));
   const ud = new Set<Face>(['U', 'D']);
@@ -93,9 +93,9 @@ function multiply(a: Cubie, b: Cubie): Cubie {
 
 // Moves: 18 face turns, index = face * 3 + (quarter turns - 1).
 const MOVE_FACES = ['U', 'R', 'F', 'D', 'L', 'B'];
-const MOVE_NAMES = MOVE_FACES.flatMap((f) => [f, f + '2', f + "'"]);
+export const MOVE_NAMES = MOVE_FACES.flatMap((f) => [f, f + '2', f + "'"]);
 const N_MOVES = 18;
-const MOVE_CUBIES = MOVE_NAMES.map((m) => toCubie(applyMove(solvedState(), m)));
+export const MOVE_CUBIES = MOVE_NAMES.map((m) => toCubie(applyMove(solvedState(), m)));
 const PHASE2_MOVES = [0, 1, 2, 4, 7, 9, 10, 11, 13, 16]; // U U2 U' R2 F2 D D2 D' L2 B2
 const N_P2 = PHASE2_MOVES.length;
 

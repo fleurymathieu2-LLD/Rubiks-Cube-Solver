@@ -3,8 +3,8 @@
 An iPad app that helps you solve a 3 × 3 Rubik's cube, and teaches you how to do it yourself.
 
 1. **Enter your cube.** Hold the cube the way the app shows and tap in the 9 colors of each side. The app checks the colors and tells you exactly what to fix if something is wrong.
-2. **Follow the steps.** Pick how to solve it. The **shortest solution** takes about 20 moves (never more than 22): a computer search finds it, so it is the quickest to follow, but it does not teach you a method. The **beginner's method** solves the cube layer by layer in 7 stages, which takes 100 to 200 moves, but you can learn it. Each step tells you how to hold the cube. You tap **Next move** and the 3D cube shows the turn, with a picture and plain words ("Turn the right side up, away from you"). It works step by step: each move has its own screen, and nothing changes until you tap. Go back and forth with **Previous move** and **Next move**, tap any move in the list to jump to it, or tap **Show this move again**.
-3. **Learn why.** Turn on **Explain** to see why each step works. The **Learn the method** page has a short guide and a demo for every stage, so you can learn to solve the cube without the app.
+2. **Follow the steps.** Pick how to solve it. The **shortest solution** takes about 20 moves (never more than 22): a computer search finds it, so it is the quickest to follow, but it does not teach you a method. The **fast method** is CFOP, what speedcubers use, with the 2-look last layer: about 75 moves in 6 stages (planned cross, F2L pairs, yellow cross, yellow face, last layer corners, last layer edges). The **beginner's method** solves the cube layer by layer in 7 stages, which takes 100 to 200 moves, but it is the easiest to learn. Each step tells you how to hold the cube. You tap **Next move** and the 3D cube shows the turn, with a picture and plain words ("Turn the right side up, away from you"). It works step by step: each move has its own screen, and nothing changes until you tap. Go back and forth with **Previous move** and **Next move**, tap any move in the list to jump to it, or tap **Show this move again**.
+3. **Learn why.** Turn on **Explain** to see why each step works. The **Learn to solve it** page has a guide for both methods, with a demo for every algorithm, so you can learn to solve the cube without the app.
 
 The app is a web app. It runs in Safari on the iPad, and you can add it to the home screen so it opens full screen like a normal app.
 
@@ -54,11 +54,12 @@ npm run build      # production build in dist/
 - **React + TypeScript + Vite**, no other runtime libraries. The 3D cube is plain CSS 3D transforms.
 - `src/cube/cube.ts`: the cube model. 54 stickers. Every move table comes from 3D geometry, not from hand-typed lists.
 - `src/cube/twophase.ts`: the short solver (Kociemba's two-phase algorithm). It builds its lookup tables on first use, in about a third of a second.
-- `src/cube/solver.ts`: turns the short solution into steps of about 5 moves, and holds the beginner's method solver. It works like a person: white on the bottom, yellow on top, and only left/right turns of the whole cube between steps. Each step has the hold, the moves (in labeled parts), a short instruction and a "why" text.
+- `src/cube/blocks.ts`: searches for the fast method: the shortest white cross, and the shortest way (R and U first, F if it saves more than 2 moves) to put each F2L pair in.
+- `src/cube/solver.ts`: turns the short solution into steps of about 5 moves, and holds the fast method and beginner's method solvers. It works like a person: white on the bottom, yellow on top, and only left/right turns of the whole cube between steps. Each step has the hold, the moves (in labeled parts), a short instruction and a "why" text.
 - `src/cube/validate.ts`: checks an entered cube (color counts, centers, real pieces, twisted corners, flipped edges, swapped pieces) and names the stickers to check.
-- `src/content/learn.ts`: the move descriptions and the guide for the 7 stages.
+- `src/content/learn.ts`: the move descriptions and the guides for both methods. Fast-method case descriptions are worked out from the demo cubes.
 - `src/ui/`: the screens and the 3D cube.
 
 ### Tests
 
-The tests solve 3000 random cubes with the beginner's method and 200 with the short solver (each in 22 moves or fewer), and replay every step. They also check each claim the guide makes about an algorithm (for example "R U R' U' takes 1, 3 or 5 rounds to insert a corner") on the cube model.
+The tests solve 3000 random cubes with the beginner's method, 500 with the fast method and 200 with the short solver (each in 22 moves or fewer), and replay every step. They also check each claim the guide makes about an algorithm (for example "R U R' U' takes 1, 3 or 5 rounds to insert a corner") on the cube model.

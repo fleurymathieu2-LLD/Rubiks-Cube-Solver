@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { applyMove, applyMoves, CubeState, parseMoves, solvedState } from '../cube/cube';
-import { describeMove, NOTATION_INTRO, NOTATION_MOVES, STAGES } from '../content/learn';
+import { describeMove, FAST_STAGES, NOTATION_INTRO, NOTATION_MOVES, STAGES } from '../content/learn';
 import { Anim, Cube3D } from './Cube3D';
 import { MoveIcon } from './MoveIcon';
 
@@ -16,7 +16,13 @@ interface DemoState {
   moves: string[];
 }
 
+type Guide = 'beginner' | 'fast';
+
 export function LearnScreen({ onHome, focusStage }: Props) {
+  const [guide, setGuide] = useState<Guide>(() =>
+    FAST_STAGES.some((s) => s.id === focusStage) ? 'fast' : 'beginner',
+  );
+  const stages = guide === 'fast' ? FAST_STAGES : STAGES;
   const [demo, setDemo] = useState<DemoState>({
     title: 'Solved cube',
     caption: 'Tap a "Show me" button to watch a move or an algorithm here.',
@@ -62,7 +68,7 @@ export function LearnScreen({ onHome, focusStage }: Props) {
     <div className="screen learn">
       <header className="topbar">
         <button className="btn btn--ghost" onClick={onHome}>← Home</button>
-        <div className="topbar__title">Learn the method</div>
+        <div className="topbar__title">Learn to solve it</div>
         <div />
       </header>
 
@@ -90,6 +96,42 @@ export function LearnScreen({ onHome, focusStage }: Props) {
         </aside>
 
         <article className="learn__text">
+          <div className="method method--two" role="radiogroup" aria-label="Which method to learn">
+            {(['beginner', 'fast'] as Guide[]).map((g) => (
+              <button
+                key={g}
+                role="radio"
+                aria-checked={guide === g}
+                className={`method__opt ${guide === g ? 'is-on' : ''}`}
+                onClick={() => setGuide(g)}
+              >
+                <span className="method__name">{g === 'beginner' ? "Beginner's method" : 'Fast method (CFOP)'}</span>
+                <span className="method__info">
+                  {g === 'beginner' ? '7 stages · 7 short algorithms · about 150 moves' : '6 stages · 14 algorithms · about 75 moves'}
+                </span>
+              </button>
+            ))}
+          </div>
+          {guide === 'fast' && (
+            <section className="learn__section">
+              <div className="eyebrow">After the beginner's method</div>
+              <h2>The fast method</h2>
+              <p className="lead">
+                This is the method almost every speedcuber uses, called CFOP: Cross, F2L, OLL and PLL. It keeps the
+                cross and the yellow cross you know, and makes every other stage shorter.
+              </p>
+              <p>
+                <b>What changes:</b> you plan the cross all at once. You put each white corner in together with its
+                middle edge (F2L), instead of all corners and then all edges. And you finish the top with one
+                algorithm per case instead of repeating short ones.
+              </p>
+              <p>
+                <b>How to learn it:</b> learn one stage at a time, and keep using the beginner's way for the rest.
+                Start with F2L, because it saves the most moves. Then learn Sune and the T-perm, and add the others one
+                by one. Choose <b>Fast method</b> on the solve screen to practice with your own cube.
+              </p>
+            </section>
+          )}
           <section className="learn__section" id="notation">
             <div className="eyebrow">Before you start</div>
             <h2>How to read the moves</h2>
@@ -117,9 +159,12 @@ export function LearnScreen({ onHome, focusStage }: Props) {
             </p>
           </section>
 
-          {STAGES.map((st) => (
+          {stages.map((st) => (
             <section className="learn__section" key={st.id} id={`stage-${st.id}`}>
-              <div className="eyebrow">Stage {st.number} of 7</div>
+              <div className="eyebrow">
+                Stage {st.number} of {stages.length}
+                {guide === 'fast' ? ' · fast method' : ''}
+              </div>
               <h2>{st.name}</h2>
               <p className="lead">{st.goal}</p>
               <p>

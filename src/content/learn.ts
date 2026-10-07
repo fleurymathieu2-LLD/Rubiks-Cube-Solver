@@ -1,5 +1,6 @@
+import { applyMoves, Face, parseMoves, solvedState } from '../cube/cube';
 import type { StageId } from '../cube/solver';
-import { ALG } from '../cube/solver';
+import { ALG, headlights, OLL_CORNERS, PLL_CORNERS, PLL_EDGES, topRow, yellowCornerLook } from '../cube/solver';
 
 /** Plain words for each move, as you hold the cube. */
 export function describeMove(move: string): string {
@@ -253,4 +254,182 @@ export const STAGES: StageGuide[] = [
   },
 ];
 
-export const STAGE_BY_ID = Object.fromEntries(STAGES.map((s) => [s.id, s])) as Record<StageId, StageGuide>;
+// ---------------------------------------------------------------------------
+// The fast method (CFOP). Case descriptions are worked out from the demo cube,
+// so they always match what the demo shows.
+
+/** The cube a demo starts from: the case its algorithm solves. */
+const caseOf = (alg: string) => applyMoves(solvedState(), parseMoves(inv(alg)));
+
+const SIDE_WORD: Record<string, string> = { F: 'front', R: 'right', B: 'back', L: 'left' };
+
+function edgeCaseWhen(alg: string, id: string): string {
+  const s = caseOf(alg);
+  if (id === 'h') return 'No side is finished. Each side shows the edge color of the opposite side, like a checkerboard.';
+  if (id === 'z') return 'No side is finished. Each side shows the edge color of a side next to it.';
+  const front = topRow(s, 'F')[1];
+  const goes = (['R', 'L'] as Face[]).find((f) => topRow(s, f)[0] === front)!;
+  return `One side is finished. Hold it at the back. The front edge belongs on the ${SIDE_WORD[goes]}: ${id === 'ua' ? 'the three edges go around' : 'they go around the other way'}.`;
+}
+
+export const FAST_STAGES: StageGuide[] = [
+  {
+    id: 'fCross',
+    number: 1,
+    name: 'Planned cross',
+    short: 'Make the white cross in 8 moves or fewer.',
+    goal: 'The same white cross as in the beginner\'s method, but planned all at once instead of one edge at a time.',
+    look: 'Find all four white edges before you turn. For each one, think: which center does it belong to, and which move brings it there?',
+    how: [
+      'Hold the cube with white on the bottom and yellow on top, like always.',
+      'Look for edges that you can bring down together, or with one move each. A white edge on top, right above its center, needs only a half turn.',
+      'Use the bottom layer (D) to move an edge you already placed out of the way, then put it back.',
+      'The app shows the shortest cross for your cube. Try to find your own first, then compare.',
+    ],
+    algorithms: [
+      {
+        name: 'Two edges with two moves',
+        alg: 'F2 R2',
+        when: 'Two white edges sit on top, each one right above its own center.',
+        demo: { setup: 'R2 F2', play: 'F2 R2', caption: 'One half turn for each edge. No edge needs more than that.' },
+      },
+    ],
+    tip: 'Every cross can be done in 8 moves or fewer. Fast solvers plan it during the 15 seconds they may look at the cube before the timer starts.',
+  },
+  {
+    id: 'f2l',
+    number: 2,
+    name: 'First two layers (F2L)',
+    short: 'Join each white corner with its edge, then insert the pair.',
+    goal: 'Finish the first two layers with 4 pairs. Each pair is a white corner and the middle-layer edge with the same two side colors.',
+    look: 'Pick a pair whose corner and edge are both on top. Hold the cube so their slot is at the front right.',
+    how: [
+      'Turn the top so the corner and the edge are not yet stuck together the wrong way.',
+      'Bring them together on top, with the matching colors side by side. They form a small 1 × 1 × 2 block.',
+      'Put the block into its slot in one go, usually with R U R\' or F\' U\' F.',
+      'If a piece is stuck in a wrong slot, hold that slot at the front right and lift it out with R U R\'.',
+    ],
+    algorithms: [
+      {
+        name: 'Corner and edge far apart',
+        alg: "R U R'",
+        when: 'The corner is at the top front right with white facing right, and the edge is at the back of the top.',
+        memory: 'R lifts the slot, U brings the corner over its edge, R\' drops both in.',
+        demo: { setup: inv("R U R'"), play: "R U R'", caption: 'R U R\' joins the pair and inserts it at the same time.' },
+      },
+      {
+        name: 'The same, mirrored',
+        alg: "F' U' F",
+        when: 'The corner is at the top front right with white facing you, and the edge is on the left of the top.',
+        demo: { setup: inv("F' U' F"), play: "F' U' F", caption: 'The mirror image of R U R\', with the front face.' },
+      },
+      {
+        name: 'Pair already joined',
+        alg: "U R U' R'",
+        when: 'The corner and edge already stick together on top, at the top front right and top right.',
+        demo: { setup: inv("U R U' R'"), play: "U R U' R'", caption: 'U moves the block away, R U\' R\' brings the slot up and drops the block in.' },
+      },
+      {
+        name: 'White facing up',
+        alg: "R U2 R' U' R U R'",
+        when: 'The corner is at the top front right with white facing up, and the edge is at the top right.',
+        memory: 'R U2 R\' turns it into the first case, then U\' R U R\' finishes it.',
+        demo: { setup: inv("R U2 R' U' R U R'"), play: "R U2 R' U' R U R'", caption: 'First pair them up, then insert the block.' },
+      },
+    ],
+    tip: 'F2L is learned by understanding, not memorizing. Watch what each R or F does to your pair, and how the next move undoes it so the cross stays safe.',
+  },
+  {
+    id: 'ollEdges',
+    number: 3,
+    name: 'Yellow cross',
+    short: 'Make a yellow plus sign on top.',
+    goal: 'Exactly like stage 4 of the beginner\'s method: make the four top edges show yellow on top.',
+    look: 'Look only at the top face and ignore the corners. You see a dot, an L shape, a line, or a cross.',
+    how: [
+      'Dot: do the algorithm once. You get an L.',
+      'L: turn the top so the L points to the back left. Do the algorithm. You get a line.',
+      'Line: turn the top so the line goes from left to right. Do the algorithm. You get the cross.',
+    ],
+    algorithms: [
+      {
+        name: 'Yellow cross',
+        alg: ALG.yellowCross,
+        when: 'Dot, L at the back left, or a line from left to right.',
+        demo: { setup: inv(ALG.yellowCross), play: ALG.yellowCross, caption: 'From the line to the cross in one go.' },
+      },
+    ],
+    tip: 'Fast solvers later learn two more algorithms, so the L and the dot each take only one algorithm.',
+  },
+  {
+    id: 'ollCorners',
+    number: 4,
+    name: 'Yellow face',
+    short: 'Turn all the yellow corners up with one of 7 algorithms.',
+    goal: 'Make the whole top face yellow in one algorithm. The beginner\'s method needs a corner-by-corner twist for this.',
+    look: 'Count the corners with yellow on top (0, 1 or 2), then look at where the other yellow stickers point. That tells you the case.',
+    how: [
+      'Find your case below by where the yellow stickers of the four top corners point.',
+      'Turn the top until they point exactly like in the case.',
+      'Do the algorithm for that case. The top face is now all yellow.',
+    ],
+    algorithms: OLL_CORNERS.map((c) => ({
+      name: c.name,
+      alg: c.alg,
+      when: `Yellow stickers of the top corners: ${yellowCornerLook(caseOf(c.alg))}.`,
+      memory:
+        c.id === 'sune'
+          ? 'R U R\' U, R U2 R\'. Learn this one first: Anti-Sune is the same moves backwards.'
+          : c.id === 'antisune'
+            ? 'The Sune played backwards.'
+            : undefined,
+      demo: { setup: inv(c.alg), play: c.alg, caption: `The ${c.name} case. Watch every yellow sticker turn up.` },
+    })),
+    tip: 'Learn Sune and Anti-Sune first. With only those two you can solve every case: repeat them until the top is yellow. Then learn the others one at a time.',
+  },
+  {
+    id: 'pllCorners',
+    number: 5,
+    name: 'Last layer corners',
+    short: 'Put the yellow corners in the right places.',
+    goal: 'Move the top corners to the right places, compared to each other. The edges may get mixed up, and that is fine.',
+    look: 'Look at the sides of the top layer. Two corners on one side with the same color look like headlights.',
+    how: [
+      'Headlights on one side: turn the top so they are on the left. Do the T-perm.',
+      'No headlights at all: do the Y-perm.',
+      'Headlights on every side: the corners are already done.',
+    ],
+    algorithms: PLL_CORNERS.map((c) => ({
+      name: c.name,
+      alg: c.alg,
+      when:
+        headlights(caseOf(c.alg)).length > 0
+          ? `Headlights on the ${headlights(caseOf(c.alg)).map((f) => SIDE_WORD[f]).join(' and ')}.`
+          : 'No headlights on any side.',
+      demo: { setup: inv(c.alg), play: c.alg, caption: `The ${c.name}. It also swaps two edges.` },
+    })),
+    tip: 'The T-perm is one of the best-known algorithms in speedcubing. Learn it until your hands play it by themselves.',
+  },
+  {
+    id: 'pllEdges',
+    number: 6,
+    name: 'Last layer edges',
+    short: 'Swap the yellow edges into place. Done!',
+    goal: 'Move the top edges to their places. Then turn the top once to finish the cube.',
+    look: 'Look for a side whose whole top row has one color: that side is finished.',
+    how: [
+      'One side finished: hold it at the back. Use Ua or Ub, depending on which way the edges must go around.',
+      'No side finished: use H-perm or Z-perm.',
+      'Turn the top to line it up with the rest. Solved!',
+    ],
+    algorithms: PLL_EDGES.map((c) => ({
+      name: c.name,
+      alg: c.alg,
+      when: edgeCaseWhen(c.alg, c.id),
+      demo: { setup: inv(c.alg), play: c.alg, caption: `The ${c.name}.` },
+    })),
+    tip: 'With these 6 algorithms you have the "2-look" last layer. Experts learn all 57 yellow-face cases and all 21 last-layer cases, so each takes one look.',
+  },
+];
+
+export const STAGE_BY_ID = Object.fromEntries([...STAGES, ...FAST_STAGES].map((s) => [s.id, s])) as Record<StageId, StageGuide>;

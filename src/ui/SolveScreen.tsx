@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { invertMove } from '../cube/cube';
 import { colorName } from '../cube/colors';
-import { Method, Solution, STAGE_ORDER } from '../cube/solver';
+import { Method, Solution, stageOrder } from '../cube/solver';
 import { describeMove, STAGE_BY_ID } from '../content/learn';
 import { Anim, Cube3D } from './Cube3D';
 import { ColorChip } from './Chip';
@@ -10,8 +10,8 @@ import { buildPlan, focusStickers, stateAt } from './plan';
 
 interface Props {
   solution: Solution;
-  /** Total moves of the other method, shown on the method switch. */
-  otherMoves: number;
+  /** Total moves of each method for this cube, shown on the method switch. */
+  moveCounts: Record<Method, number>;
   setMethod: (m: Method) => void;
   position: { step: number; move: number };
   setPosition: (p: { step: number; move: number }) => void;
@@ -31,7 +31,7 @@ const HOLD_TEXT: Record<string, string> = {
   y2: 'Turn the whole cube around',
 };
 
-export function SolveScreen({ solution, otherMoves, setMethod, position, setPosition, explain, setExplain, onHome, onNewCube, onLearn }: Props) {
+export function SolveScreen({ solution, moveCounts, setMethod, position, setPosition, explain, setExplain, onHome, onNewCube, onLearn }: Props) {
   const plan = useMemo(() => buildPlan(solution), [solution]);
   const [anim, setAnim] = useState<(Anim & { back: boolean }) | null>(null);
   const animId = useRef(0);
@@ -137,12 +137,17 @@ export function SolveScreen({ solution, otherMoves, setMethod, position, setPosi
   }
 
   const short = solution.method === 'short';
-  const stageIdx = STAGE_ORDER.indexOf(step.stage);
+  const order = stageOrder(solution.method);
+  const stageIdx = order.indexOf(step.stage);
   const guide = STAGE_BY_ID[step.stage];
-  const moves = (m: Method) => (m === solution.method ? solution.totalMoves : otherMoves);
+  const METHOD_TEXT: Record<Method, [string, string]> = {
+    short: ['Shortest solution', 'computer, not to learn'],
+    fast: ['Fast method', 'how speedcubers solve'],
+    beginner: ["Beginner's method", 'easiest to learn'],
+  };
   const methodSwitch = (
     <div className="method" role="radiogroup" aria-label="Solving method">
-      {(['short', 'beginner'] as Method[]).map((m) => (
+      {(['short', 'fast', 'beginner'] as Method[]).map((m) => (
         <button
           key={m}
           role="radio"
@@ -150,9 +155,9 @@ export function SolveScreen({ solution, otherMoves, setMethod, position, setPosi
           className={`method__opt ${solution.method === m ? 'is-on' : ''}`}
           onClick={() => solution.method !== m && setMethod(m)}
         >
-          <span className="method__name">{m === 'short' ? 'Shortest solution' : "Beginner's method"}</span>
+          <span className="method__name">{METHOD_TEXT[m][0]}</span>
           <span className="method__info">
-            {moves(m)} moves · {m === 'short' ? 'fastest to do' : 'you can learn it'}
+            {moveCounts[m]} moves · {METHOD_TEXT[m][1]}
           </span>
         </button>
       ))}
@@ -190,8 +195,8 @@ export function SolveScreen({ solution, otherMoves, setMethod, position, setPosi
       {methodSwitch}
 
       {!short && (
-        <nav className="stages" aria-label="Stages">
-          {STAGE_ORDER.map((id, i) => {
+        <nav className="stages" aria-label="Stages" style={{ gridTemplateColumns: `repeat(${order.length}, minmax(0, 1fr))` }}>
+          {order.map((id, i) => {
             const steps = plan.filter((s) => s.stage === id);
             const first = steps[0];
             const state = done || i < stageIdx ? 'done' : i === stageIdx ? 'now' : 'next';
@@ -271,22 +276,27 @@ export function SolveScreen({ solution, otherMoves, setMethod, position, setPosi
         <section className="solve__panel" aria-live="polite">
           {done ? (
             <div className="finish">
-              <div className="eyebrow">{short ? 'Shortest solution done' : 'All 7 stages done'}</div>
+              <div className="eyebrow">{short ? 'Shortest solution done' : `All ${order.length} stages done`}</div>
               <h2>Your cube is solved!</h2>
               {short ? (
                 <p>
                   You made {solution.totalMoves} moves. To learn to solve the cube on your own, try the{' '}
-                  <b>Beginner's method</b> with <b>Explain</b> on.
+                  <b>Beginner's method</b> or the <b>Fast method</b> with <b>Explain</b> on.
                 </p>
               ) : (
                 <p>
                   You made {solution.totalMoves} moves in {plan.length} steps. Every time you solve with the app, you
                   learn the patterns a little more. Turn on <b>Explain</b> next time to learn why each step works.
+                  {solution.method === 'beginner' && (
+                    <> When the beginner's method feels easy, try the <b>Fast method</b>: {moveCounts.fast} moves for this cube instead of {solution.totalMoves}.</>
+                  )}
                 </p>
               )}
               <div className="row">
                 <button className="btn btn--primary" onClick={onNewCube}>Solve another cube</button>
-                <button className="btn" onClick={() => onLearn()}>Learn the method</button>
+                <button className="btn" onClick={() => onLearn(solution.method === 'fast' ? 'fCross' : undefined)}>
+                  Learn the method
+                </button>
               </div>
             </div>
           ) : (
@@ -294,7 +304,7 @@ export function SolveScreen({ solution, otherMoves, setMethod, position, setPosi
               <div className="eyebrow">
                 {short
                   ? `Shortest solution · part ${stepInStage} of ${stageSteps.length}`
-                  : `Stage ${stageIdx + 1} of 7 · ${guide.name}`}
+                  : `Stage ${stageIdx + 1} of ${order.length} · ${guide.name}`}
                 {!short && stageSteps.length > 1 ? ` · part ${stepInStage} of ${stageSteps.length}` : ''}
               </div>
 
