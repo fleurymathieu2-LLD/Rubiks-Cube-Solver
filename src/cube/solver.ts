@@ -21,6 +21,7 @@ import {
   slotSolved,
 } from './cube';
 import { colorName } from './colors';
+import { solveShort } from './twophase';
 
 export type StageId =
   | 'cross'
@@ -29,7 +30,12 @@ export type StageId =
   | 'yellowCross'
   | 'yellowEdges'
   | 'cornerPositions'
-  | 'cornerTwist';
+  | 'cornerTwist'
+  /** The short solution has one stage of its own. */
+  | 'short';
+
+/** "beginner": the 7-stage layer-by-layer method. "short": about 20 moves, found by a computer search. */
+export type Method = 'beginner' | 'short';
 
 export const STAGE_ORDER: StageId[] = [
   'cross',
@@ -73,6 +79,7 @@ export interface StageSummary {
 }
 
 export interface Solution {
+  method: Method;
   start: CubeState;
   startFront: Color;
   startTop: Color;
@@ -606,7 +613,55 @@ function orientWhiteDown(state: CubeState): CubeState {
   throw new Error('No white center');
 }
 
-export function solve(input: CubeState): Solution {
+export function solve(input: CubeState, method: Method = 'beginner'): Solution {
+  return method === 'short' ? solveShortSteps(input) : solveBeginner(input);
+}
+
+/** Moves per step in the short solution: small enough to check the cube against the picture often. */
+const SHORT_CHUNK = 5;
+
+function solveShortSteps(input: CubeState): Solution {
+  const start = orientWhiteDown(input);
+  const moves = solveShort(start);
+  const front = centerColor(start, 'F');
+  const top = centerColor(start, 'U');
+  const chunks = Math.ceil(moves.length / SHORT_CHUNK);
+  const steps: SolveStep[] = [];
+  let s = start;
+  for (let i = 0, from = 0; i < chunks; i++) {
+    // Spread the moves evenly, for example 21 moves as 6, 5, 5, 5.
+    const to = Math.round(((i + 1) * moves.length) / chunks);
+    const chunk = moves.slice(from, to);
+    steps.push({
+      stage: 'short',
+      title: `Moves ${from + 1} to ${to}`,
+      instruction:
+        `Keep ${low(front)} in front and ${low(top)} on top for the whole solve. Do these ${chunk.length} moves, then check that your cube looks like the picture.` +
+        (i === chunks - 1 ? ' After the last one, your cube is solved.' : ''),
+      why: `A computer tried millions of move sequences and picked one of the shortest it found: ${moves.length} moves for the whole cube. The cube only looks solved at the very end, because these moves do not build it layer by layer. That is why there is nothing to learn from each step. To learn to solve the cube yourself, switch to the beginner's method.`,
+      front,
+      top,
+      parts: [part(`Moves ${from + 1}–${to}`, chunk)],
+      moves: chunk,
+      stateBefore: s,
+      focus: [],
+    });
+    s = applyMoves(s, chunk);
+    from = to;
+  }
+  if (!isSolved(s)) throw new Error('Short solver did not finish');
+  return {
+    method: 'short',
+    start,
+    startFront: front,
+    startTop: top,
+    steps,
+    stages: [{ id: 'short', steps: steps.length, moves: moves.length }],
+    totalMoves: moves.length,
+  };
+}
+
+function solveBeginner(input: CubeState): Solution {
   const start = orientWhiteDown(input);
   const solver = new Solver(start);
   solver.solveCross();
@@ -623,6 +678,7 @@ export function solve(input: CubeState): Solution {
     return { id, steps: steps.length, moves: steps.reduce((n, s) => n + s.moves.length, 0) };
   });
   return {
+    method: 'beginner',
     start,
     startFront: centerColor(start, 'F'),
     startTop: centerColor(start, 'U'),

@@ -23,4 +23,16 @@ describe('player plan', () => {
       expect(isSolved(stateAt(last, last.seq.length))).toBe(true);
     }
   });
+
+  it('plays the short solution without turning the whole cube, and ends solved', () => {
+    for (let seed = 1; seed <= 20; seed++) {
+      const sol = solve(applyMoves(solvedState(), scramble(seed)), 'short');
+      const plan = buildPlan(sol);
+      expect(plan.every((st) => st.seq.every((m) => m.kind === 'turn'))).toBe(true);
+      expect(plan.every((st) => st.seq.length <= 6)).toBe(true);
+      expect(sol.totalMoves).toBeLessThanOrEqual(22);
+      const last = plan[plan.length - 1];
+      expect(isSolved(stateAt(last, last.seq.length))).toBe(true);
+    }
+  });
 });

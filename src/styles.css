@@ -591,6 +591,36 @@ button {
 }
 
 /* Solve ------------------------------------------------------------------ */
+.method {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-block: 6px 10px;
+}
+.method__opt {
+  display: grid;
+  gap: 2px;
+  text-align: left;
+  padding: 10px 14px;
+  min-height: 56px;
+  border-radius: 10px;
+  border: 1.5px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+}
+.method__opt.is-on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.method__name {
+  font-family: var(--font-display);
+  font-weight: 700;
+}
+.method__info {
+  font-size: var(--step--1);
+  color: var(--muted);
+}
 .stages {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));

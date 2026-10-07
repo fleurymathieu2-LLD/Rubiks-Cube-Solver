@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { applyMoves, Color, CubeState, Face, FACES, parseMoves, solvedState, stickerIndex, SOLVED_COLORS } from './cube/cube';
-import { solve, Solution, STAGE_ORDER } from './cube/solver';
+import { Method, solve, Solution, STAGE_ORDER } from './cube/solver';
 import { Entered, Problem, validate } from './cube/validate';
 import { STAGE_BY_ID } from './content/learn';
 import { Cube3D } from './ui/Cube3D';
@@ -39,23 +39,30 @@ export default function App() {
   const [solveInput, setSolveInput] = useState<CubeState | null>(() => load<CubeState | null>('solveInput', null));
   const [position, setPosition] = useState(() => load('position', { step: 0, move: 0 }));
   const [explain, setExplain] = useState<boolean>(() => load('explain', false));
+  const [method, setMethod] = useState<Method>(() => load<Method>('method', 'short'));
   const [learnStage, setLearnStage] = useState<string | null>(null);
 
   useEffect(() => save('entered', entered), [entered]);
   useEffect(() => save('solveInput', solveInput), [solveInput]);
   useEffect(() => save('position', position), [position]);
   useEffect(() => save('explain', explain), [explain]);
+  useEffect(() => save('method', method), [method]);
   useEffect(() => save('screen', screen === 'learn' ? 'home' : screen), [screen]);
-  useEffect(() => window.scrollTo(0, 0), [screen]);
+  useEffect(() => {
+    // Newer browsers return a promise from scrollTo, which an effect must not return.
+    window.scrollTo(0, 0);
+  }, [screen]);
 
-  const solution: Solution | null = useMemo(() => {
+  // Both solutions are worked out, so the solve screen can show how many moves each one takes.
+  const solutions: Record<Method, Solution> | null = useMemo(() => {
     if (!solveInput) return null;
     try {
-      return solve(solveInput);
+      return { short: solve(solveInput, 'short'), beginner: solve(solveInput, 'beginner') };
     } catch {
       return null;
     }
   }, [solveInput]);
+  const solution = solutions?.[method] ?? null;
 
   // A saved screen that has nothing to show falls back to home.
   const shownScreen: Screen = screen === 'solve' && !solution ? 'home' : screen;
@@ -106,6 +113,11 @@ export default function App() {
     return (
       <SolveScreen
         solution={solution}
+        otherMoves={solutions![method === 'short' ? 'beginner' : 'short'].totalMoves}
+        setMethod={(m) => {
+          setMethod(m);
+          setPosition({ step: 0, move: 0 });
+        }}
         position={position}
         setPosition={setPosition}
         explain={explain}
@@ -132,7 +144,8 @@ export default function App() {
           <h1>Cube Solver</h1>
           <p className="lead">
             Tell the app the colors on your cube. It shows you how to solve it, one move at a time, in plain words.
-            Turn on <b>Explain</b> to learn why each move works, so one day you can do it without the app.
+            Pick the <b>shortest solution</b> (about 20 moves), or the <b>beginner's method</b> with <b>Explain</b> on
+            to learn why each move works, so one day you can do it without the app.
           </p>
           <div className="home__actions">
             {inProgress && (
@@ -176,7 +189,7 @@ export default function App() {
         <div className="howcard">
           <div className="howcard__n">3</div>
           <h3>Learn the why</h3>
-          <p>The app uses the beginner's method in 7 stages. Each stage has a short guide and a demo.</p>
+          <p>The beginner's method takes more moves, but you can learn it. It has 7 stages, each with a short guide and a demo.</p>
         </div>
       </section>
 
